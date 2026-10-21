@@ -1,0 +1,560 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hand Sign Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: camera sticky on the left, four numbered steps stacked on the right (one column on phones). ReDi colours. */
+:root {
+  --teal: #3f97b5; --teal-soft: #e3f0f5; --orange: #e8562a; --slate: #263238;
+  --bg: #cfe6ee; --card: #ffffff; --fg: #1d2a30; --muted: #5b6b72; --line: #c5dbe3;
+  --good: #2e8b57; --bad: #c0392b;
+  --c0: #e8562a; --c1: #3f97b5; --c2: #8e5bb5; --c3: #d4a017;
+  --sans: "Source Sans 3", "Source Sans Pro", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--fg); font: 16px/1.45 var(--sans);
+  padding-block: 20px 40px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+header { max-width: 1280px; margin: 0 auto 16px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; }
+h1 { margin: 0; font-size: 30px; font-weight: 800; color: var(--orange); letter-spacing: -0.01em; }
+header p { margin: 0; color: var(--muted); }
+.wrap { max-width: 1280px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 900px) { .wrap { grid-template-columns: minmax(0, 1fr); } }
+.card { background: var(--card); border-radius: 12px; padding: 16px 18px; min-width: 0; }
+.stage { position: sticky; top: 12px; display: grid; gap: 12px; }
+@media (max-width: 900px) { .stage { position: static; } }
+.video-box { position: relative; width: 100%; aspect-ratio: 4 / 3; max-width: 100%; background: var(--slate); border-radius: 12px; overflow: hidden; }
+.video-box video, .video-box canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+.overlay-msg { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; color: #fff; padding: 24px; font-size: 18px; }
+.overlay-msg button { margin-top: 12px; }
+.rec-badge { position: absolute; top: 12px; left: 12px; background: var(--orange); color: #fff; font-weight: 700; padding: 4px 10px; border-radius: 999px; font-size: 14px; }
+.big-guess { position: absolute; bottom: 12px; left: 12px; right: 12px; display: flex; justify-content: space-between; align-items: end; gap: 8px; pointer-events: none; }
+.big-guess .label { background: rgba(38,50,56,.85); color: #fff; font-size: 26px; font-weight: 800; padding: 6px 14px; border-radius: 10px; }
+.big-guess .unsure { color: #ffd38a; }
+h2 { margin: 0 0 4px; font-size: 20px; display: flex; gap: 10px; align-items: baseline; }
+h2 .n { color: #fff; background: var(--teal); border-radius: 6px; padding: 0 8px; font-size: 16px; }
+.hint { color: var(--muted); margin: 0 0 12px; font-size: 15px; }
+.steps { display: grid; gap: 16px; min-width: 0; }
+button { font: inherit; font-weight: 700; border: 0; border-radius: 8px; padding: 8px 14px; cursor: pointer; background: var(--teal); color: #fff; }
+button.ghost { background: var(--teal-soft); color: var(--slate); }
+button.warn { background: var(--orange); }
+button:disabled { opacity: .45; cursor: not-allowed; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid var(--orange); outline-offset: 2px; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.classes { display: grid; gap: 8px; }
+.cls { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto auto; gap: 8px; align-items: center; background: var(--teal-soft); border-radius: 8px; padding: 6px 8px; }
+.dot { width: 14px; height: 14px; border-radius: 50%; }
+.cls input { font: inherit; font-weight: 700; border: 1px solid transparent; background: transparent; padding: 2px 4px; border-radius: 4px; min-width: 0; width: 100%; color: var(--fg); }
+.cls input:hover { border-color: var(--line); }
+.count { font-family: var(--mono); font-size: 13px; color: var(--muted); white-space: nowrap; }
+.cls button { padding: 6px 10px; font-size: 14px; }
+.cls button.recording { background: var(--orange); }
+.mode { display: inline-flex; border-radius: 8px; overflow: hidden; border: 1px solid var(--line); }
+.mode label { padding: 6px 12px; cursor: pointer; font-weight: 600; font-size: 15px; }
+.mode input { position: absolute; opacity: 0; pointer-events: none; }
+.mode input:checked + span { color: #fff; }
+.mode label:has(input:checked) { background: var(--teal); color: #fff; }
+.mode label:has(input:focus-visible) { outline: 3px solid var(--orange); outline-offset: -3px; }
+.slider { display: grid; grid-template-columns: auto minmax(0, 1fr) 3.5em; gap: 10px; align-items: center; margin: 8px 0; }
+.slider input { width: 100%; accent-color: var(--orange); }
+.slider output { font-family: var(--mono); font-weight: 600; text-align: right; }
+table { border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.scores { width: 100%; margin-top: 8px; }
+.scores th, .scores td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+.scores td.num { font-family: var(--mono); font-weight: 600; }
+.scores tr.sel { background: var(--teal-soft); }
+.gapnote { font-size: 14px; color: var(--muted); }
+.probs { display: grid; gap: 10px; }
+.probs h3 { margin: 0 0 4px; font-size: 15px; color: var(--muted); font-weight: 600; }
+.bar { display: grid; grid-template-columns: 7.5em minmax(0, 1fr) 3em; gap: 8px; align-items: center; font-size: 14px; }
+.bar .track { height: 14px; background: var(--teal-soft); border-radius: 7px; position: relative; overflow: hidden; }
+.bar .fill { position: absolute; inset: 0 auto 0 0; border-radius: 7px; transition: width .12s; }
+.bar .thr { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--slate); }
+.bar span:last-child { font-family: var(--mono); text-align: right; }
+.bar .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scroll { overflow-x: auto; }
+.cm td, .cm th { padding: 6px 10px; text-align: center; font-family: var(--mono); font-size: 14px; }
+.cm th { font-family: var(--sans); font-size: 13px; color: var(--muted); font-weight: 600; }
+.cm td.diag { background: #d8efe0; }
+.cm td.off { background: #fbe1da; }
+.tree { font-family: var(--mono); font-size: 13px; line-height: 1.6; white-space: pre; background: var(--teal-soft); border-radius: 8px; padding: 10px 12px; max-height: 340px; overflow: auto; }
+.weights td, .weights th { padding: 4px 8px; font-family: var(--mono); font-size: 13px; text-align: right; }
+.weights th { font-family: var(--sans); color: var(--muted); font-weight: 600; }
+.weights td:first-child, .weights th:first-child { text-align: left; font-family: var(--sans); }
+.pos { color: var(--good); } .neg { color: var(--bad); }
+details summary { cursor: pointer; font-weight: 700; color: var(--teal); margin-top: 10px; }
+.game { display: grid; gap: 10px; }
+.arena { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: center; text-align: center; background: var(--slate); color: #fff; border-radius: 12px; padding: 16px; }
+.arena .who { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: #a9c7d3; }
+.arena .move { font-size: 30px; font-weight: 800; min-height: 1.3em; }
+.arena .vs { font-size: 40px; font-weight: 800; color: var(--orange); }
+.result { font-size: 20px; font-weight: 800; text-align: center; min-height: 1.4em; }
+.scoreline { font-family: var(--mono); text-align: center; color: var(--muted); }
+.note { background: var(--slate); color: #fff; border-radius: 8px; padding: 10px 12px; font-size: 15px; }
+.note b { color: #ffb08f; }
+kbd { font-family: var(--mono); background: var(--teal-soft); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; font-size: 13px; }
+@media (prefers-reduced-motion: reduce) { .bar .fill { transition: none; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Hand Sign Lab</h1>
+  <p>Teach your laptop your hand signs with two classic models: logistic regression and a decision tree.</p>
+</header>
+
+<div class="wrap">
+  <div class="stage">
+    <div class="video-box" id="videoBox">
+      <video id="video" playsinline muted></video>
+      <canvas id="overlay"></canvas>
+      <div class="rec-badge" id="recBadge" hidden>● recording</div>
+      <div class="big-guess"><div class="label" id="bigGuess" hidden></div></div>
+      <div class="overlay-msg" id="camMsg">
+        <div>
+          <div>The camera image stays on your laptop. Nothing is uploaded.</div>
+          <button id="startBtn" class="warn">Start camera</button>
+          <div id="camErr" class="gapnote" style="color:#ffd38a;margin-top:10px"></div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="row">
+        <span class="mode" role="radiogroup" aria-label="Model in use">
+          <label><input type="radio" name="model" value="lr" checked><span>Logistic regression</span></label>
+          <label><input type="radio" name="model" value="tree"><span>Decision tree</span></label>
+        </span>
+      </div>
+      <div class="slider"><label for="thr">Cutoff</label><input id="thr" type="range" min="0.34" max="0.99" step="0.01" value="0.5"><output id="thrOut">0.50</output></div>
+      <p class="gapnote" style="margin:0 0 10px">The model only acts when its top probability is above the cutoff. Otherwise it says "not sure". This model and cutoff are used everywhere: live guess, test, game.</p>
+      <div class="probs" id="probs"><div class="gapnote">Train a model (step 2) to see live predictions here.</div></div>
+    </div>
+  </div>
+
+  <div class="steps">
+    <section class="card">
+      <h2><span class="n">1</span> Collect training data</h2>
+      <p class="hint">Hold the button (or keys <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd>) while you show the sign. Move your hand around a bit: closer, further, tilted. Aim for 100+ examples per sign. You can rename the signs.</p>
+      <div class="classes" id="classes"></div>
+      <div class="row" style="margin-top:10px">
+        <button class="ghost" id="clearBtn">Delete all data</button>
+        <button class="ghost" id="csvBtn">Download data as CSV</button>
+        <label class="ghost-file"><button class="ghost" id="loadBtn" type="button">Load a CSV</button><input type="file" id="loadFile" accept=".csv" hidden></label>
+      </div>
+      <p class="gapnote" id="loadMsg" style="margin:6px 0 0">Load a teammate's CSV to test your model on their hand: its training rows go into your test set.</p>
+    </section>
+
+    <section class="card">
+      <h2><span class="n">2</span> Train and compare</h2>
+      <p class="hint">Pick what the models see, then train. The tree retrains as you move its sliders.</p>
+      <div class="row">
+        <span class="mode" role="radiogroup" aria-label="Features">
+          <label><input type="radio" name="feat" value="stretch" checked><span>6 finger measurements</span></label>
+          <label><input type="radio" name="feat" value="raw"><span>42 raw point positions</span></label>
+        </span>
+        <button id="trainBtn">Train both models</button>
+      </div>
+      <div class="slider"><label for="depth">Tree max depth</label><input id="depth" type="range" min="1" max="12" value="3"><output id="depthOut">3</output></div>
+      <div class="slider"><label for="leaf">Min examples per leaf</label><input id="leaf" type="range" min="1" max="40" value="5"><output id="leafOut">5</output></div>
+      <div id="scores"></div>
+    </section>
+
+    <section class="card">
+      <h2><span class="n">3</span> Test: new data the models never saw</h2>
+      <p class="hint">Record a few seconds per sign <b>in a different way</b>: other hand, other distance, stand up, ask someone else. These examples are never used for training, only for grading.</p>
+      <div class="classes" id="testClasses"></div>
+      <div id="testOut" style="margin-top:10px"></div>
+    </section>
+
+    <section class="card">
+      <h2><span class="n">4</span> Play: rock, paper, scissors</h2>
+      <p class="hint">Uses the model and cutoff chosen under the camera. Throw your sign on "shoot!". The model watches for half a second and takes the sign it saw most. If it is "not sure" most of that time, you lose the round. Signs must be named Rock, Paper, Scissors in this order.</p>
+      <div class="game">
+        <div class="arena">
+          <div><div class="who">You (as the model saw it)</div><div class="move" id="youMove">–</div></div>
+          <div class="vs" id="countdown">vs</div>
+          <div><div class="who">Computer</div><div class="move" id="cpuMove">–</div></div>
+        </div>
+        <div class="result" id="result"></div>
+        <div class="row" style="justify-content:center"><button class="warn" id="playBtn">Play a round</button></div>
+        <div class="scoreline" id="scoreline">You 0 · Computer 0 · Not sure 0</div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2><span class="n">5</span> Look inside the models</h2>
+      <p class="hint">The tree is a list of if-then rules you can read. Logistic regression is one weight per feature per sign.</p>
+      <div id="inside" class="gapnote">Train first.</div>
+      <p class="gapnote" style="margin-top:12px">Same models in Python: download your data as CSV (step 1), then open <a href="hand_signs_starter.ipynb">hand_signs_starter.ipynb</a> in Colab or Databricks.</p>
+    </section>
+  </div>
+</div>
+
+<script type="module">
+import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
+
+const COLORS = ["var(--c0)", "var(--c1)", "var(--c2)"];
+const CANVAS_COLORS = ["#e8562a", "#3f97b5", "#8e5bb5"];
+const classNames = ["Rock", "Paper", "Scissors"];
+const train = [];   // { raw: number[42], stretch: number[6], y }
+const test = [];
+let recording = null; // { set: "train"|"test", y }
+let lr = null, tree = null, trainedFeat = null;
+let latest = null; // latest feature vectors from the camera
+let landmarker = null;
+const score = { you: 0, cpu: 0, unsure: 0 };
+
+const $ = (id) => document.getElementById(id);
+const featKind = () => document.querySelector('input[name="feat"]:checked').value;
+const modelKind = () => document.querySelector('input[name="model"]:checked').value;
+const threshold = () => parseFloat($("thr").value);
+
+/* ---------- features ---------- */
+const POINT_NAMES = ["wrist", "thumb base", "thumb knuckle", "thumb joint", "thumb tip",
+  "index base", "index knuckle", "index joint", "index tip",
+  "middle base", "middle knuckle", "middle joint", "middle tip",
+  "ring base", "ring knuckle", "ring joint", "ring tip",
+  "pinky base", "pinky knuckle", "pinky joint", "pinky tip"];
+const RAW_NAMES = POINT_NAMES.flatMap((n) => [n + " x", n + " y"]);
+const STRETCH_NAMES = ["thumb out", "index stretch", "middle stretch", "ring stretch", "pinky stretch", "index–middle gap"];
+
+function features(lm, handedness) {
+  const flip = handedness === "Left" ? -1 : 1;
+  const w = lm[0];
+  const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+  const palm = dist(lm[0], lm[9]) || 1e-6;
+  const raw = [];
+  for (const p of lm) raw.push(flip * (p.x - w.x) / palm, (p.y - w.y) / palm);
+  const stretch = [
+    dist(lm[4], lm[17]) / palm,
+    dist(lm[8], lm[0]) / palm,
+    dist(lm[12], lm[0]) / palm,
+    dist(lm[16], lm[0]) / palm,
+    dist(lm[20], lm[0]) / palm,
+    dist(lm[8], lm[12]) / palm,
+  ];
+  return { raw, stretch };
+}
+
+/* ---------- logistic regression (softmax, gradient descent) ---------- */
+function trainLR(X, y, k) {
+  const n = X.length, d = X[0].length;
+  const mean = Array(d).fill(0), std = Array(d).fill(0);
+  for (const x of X) x.forEach((v, j) => (mean[j] += v / n));
+  for (const x of X) x.forEach((v, j) => (std[j] += (v - mean[j]) ** 2 / n));
+  for (let j = 0; j < d; j++) std[j] = Math.sqrt(std[j]) || 1;
+  const Z = X.map((x) => x.map((v, j) => (v - mean[j]) / std[j]));
+  const W = Array.from({ length: k }, () => Array(d).fill(0));
+  const b = Array(k).fill(0);
+  const lrate = 0.5, l2 = 0.001;
+  for (let it = 0; it < 400; it++) {
+    const gW = Array.from({ length: k }, () => Array(d).fill(0));
+    const gb = Array(k).fill(0);
+    for (let i = 0; i < n; i++) {
+      const p = softmax(W.map((w, c) => dot(w, Z[i]) + b[c]));
+      for (let c = 0; c < k; c++) {
+        const e = p[c] - (y[i] === c ? 1 : 0);
+        gb[c] += e / n;
+        for (let j = 0; j < d; j++) gW[c][j] += (e * Z[i][j]) / n;
+      }
+    }
+    for (let c = 0; c < k; c++) {
+      b[c] -= lrate * gb[c];
+      for (let j = 0; j < d; j++) W[c][j] -= lrate * (gW[c][j] + l2 * W[c][j]);
+    }
+  }
+  return { W, b, mean, std, predict: (x) => softmax(W.map((w, c) => dot(w, x.map((v, j) => (v - mean[j]) / std[j])) + b[c])) };
+}
+const dot = (a, b) => a.reduce((s, v, i) => s + v * b[i], 0);
+function softmax(z) { const m = Math.max(...z); const e = z.map((v) => Math.exp(v - m)); const s = e.reduce((a, c) => a + c, 0); return e.map((v) => v / s); }
+
+/* ---------- decision tree (CART, gini) ---------- */
+function trainTree(X, y, k, maxDepth, minLeaf) {
+  const gini = (counts, n) => 1 - counts.reduce((s, c) => s + (c / n) ** 2, 0);
+  const countsOf = (idx) => { const c = Array(k).fill(0); for (const i of idx) c[y[i]]++; return c; };
+  function build(idx, depth) {
+    const counts = countsOf(idx);
+    const node = { counts, n: idx.length };
+    if (depth >= maxDepth || idx.length < 2 * minLeaf || counts.some((c) => c === idx.length)) return node;
+    let best = null;
+    const parent = gini(counts, idx.length);
+    for (let f = 0; f < X[0].length; f++) {
+      const sorted = [...idx].sort((a, b) => X[a][f] - X[b][f]);
+      const left = Array(k).fill(0), right = [...counts];
+      for (let s = 0; s < sorted.length - 1; s++) {
+        const i = sorted[s];
+        left[y[i]]++; right[y[i]]--;
+        const nl = s + 1, nr = sorted.length - nl;
+        if (nl < minLeaf || nr < minLeaf) continue;
+        const v = X[i][f], vNext = X[sorted[s + 1]][f];
+        if (v === vNext) continue;
+        const g = (nl * gini(left, nl) + nr * gini(right, nr)) / sorted.length;
+        if (!best || g < best.g) best = { g, f, t: (v + vNext) / 2 };
+      }
+    }
+    if (!best || best.g >= parent - 1e-9) return node;
+    const L = idx.filter((i) => X[i][best.f] <= best.t), R = idx.filter((i) => X[i][best.f] > best.t);
+    return { ...node, f: best.f, t: best.t, left: build(L, depth + 1), right: build(R, depth + 1) };
+  }
+  const root = build(X.map((_, i) => i), 0);
+  const predict = (x) => { let nd = root; while (nd.left) nd = x[nd.f] <= nd.t ? nd.left : nd.right; return nd.counts.map((c) => c / nd.n); };
+  return { root, predict };
+}
+function treeDepth(nd) { return nd.left ? 1 + Math.max(treeDepth(nd.left), treeDepth(nd.right)) : 0; }
+function treeLeaves(nd) { return nd.left ? treeLeaves(nd.left) + treeLeaves(nd.right) : 1; }
+
+/* ---------- training + evaluation ---------- */
+const argmax = (p) => p.indexOf(Math.max(...p));
+function accuracy(model, data, kind) {
+  if (!model || !data.length) return null;
+  let ok = 0; for (const s of data) if (argmax(model.predict(s[kind])) === s.y) ok++;
+  return ok / data.length;
+}
+function usableClasses() { return [0, 1, 2].filter((c) => train.some((s) => s.y === c)); }
+
+function trainLRNow() {
+  const kind = featKind();
+  if (usableClasses().length < 2) { $("scores").innerHTML = '<p class="gapnote">Record at least two signs first.</p>'; return false; }
+  lr = trainLR(train.map((s) => s[kind]), train.map((s) => s.y), 3);
+  trainedFeat = kind;
+  return true;
+}
+function trainTreeNow() {
+  if (!trainedFeat || !train.length) return;
+  tree = trainTree(train.map((s) => s[trainedFeat]), train.map((s) => s.y), 3, +$("depth").value, +$("leaf").value);
+}
+function trainAll() { if (trainLRNow()) { trainTreeNow(); refreshResults(); } }
+
+const pct = (v) => (v === null ? "–" : Math.round(v * 100) + "%");
+function refreshResults() {
+  if (!lr) return;
+  const rows = [["Logistic regression", lr, "lr"], [`Decision tree (depth ${tree ? treeDepth(tree.root) : "–"}, ${tree ? treeLeaves(tree.root) : "–"} leaves)`, tree, "tree"]];
+  const testTxt = test.length ? "" : '<p class="gapnote">Test column fills in after you record step 3.</p>';
+  const featLabel = trainedFeat === "stretch" ? "6 finger measurements" : "42 raw point positions";
+  $("scores").innerHTML = `<p class="gapnote" style="margin:8px 0 0">Trained on <b>${featLabel}</b>, ${train.length} examples.</p><div class="scroll"><table class="scores"><thead><tr><th>Model</th><th>Training data</th><th>Test data</th></tr></thead><tbody>${
+    rows.map(([name, m, key]) => `<tr class="${modelKind() === key ? "sel" : ""}"><td>${name}</td><td class="num">${pct(accuracy(m, train, trainedFeat))}</td><td class="num">${pct(accuracy(m, test, trainedFeat))}</td></tr>`).join("")
+  }</tbody></table></div>${testTxt}<p class="gapnote">Big gap between the two columns = the model memorised your training data instead of learning the sign.</p>`;
+  refreshTest(); refreshInside();
+}
+
+function refreshTest() {
+  const m = modelKind() === "lr" ? lr : tree;
+  if (!m || !test.length) { $("testOut").innerHTML = ""; return; }
+  const t = threshold();
+  const cm = [[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]]; // last column = not sure
+  let acted = 0, right = 0;
+  for (const s of test) {
+    const p = m.predict(s[trainedFeat]); const c = argmax(p);
+    if (p[c] >= t) { cm[s.y][c]++; acted++; if (c === s.y) right++; } else cm[s.y][3]++;
+  }
+  const cls = (v, i, j) => (!v ? "" : j === 3 ? "" : i === j ? "diag" : "off");
+  $("testOut").innerHTML = `<div class="gapnote" style="margin-bottom:4px">Confusion matrix on the test: <b>${modelKind() === "lr" ? "logistic regression" : "decision tree"}</b>, cutoff <b>${t.toFixed(2)}</b>. Rows = what you showed, columns = what the model said.</div>
+  <div class="scroll"><table class="cm"><tr><th></th>${classNames.map((n) => `<th>said ${esc(n)}</th>`).join("")}<th>not sure</th></tr>${
+    cm.map((r, i) => `<tr><th>showed ${esc(classNames[i])}</th>${r.map((v, j) => `<td class="${cls(v, i, j)}">${v}</td>`).join("")}</tr>`).join("")
+  }</table></div>
+  <p class="gapnote">The model acts on <b>${acted} of ${test.length}</b> test examples (${pct(acted / test.length)}). When it acts, it is right <b>${acted ? pct(right / acted) : "–"}</b> of the time. Raise the cutoff: fewer actions, fewer mistakes.</p>`;
+}
+
+function refreshInside() {
+  if (!lr) return;
+  const names = trainedFeat === "stretch" ? STRETCH_NAMES : RAW_NAMES;
+  const lines = [];
+  function walk(nd, indent) {
+    const pad = "  ".repeat(indent);
+    if (!nd.left) { const c = argmax(nd.counts); lines.push(`${pad}→ ${classNames[c]}  (${nd.counts.join(" / ")})`); return; }
+    lines.push(`${pad}if ${names[nd.f]} ≤ ${nd.t.toFixed(2)}:`); walk(nd.left, indent + 1);
+    lines.push(`${pad}else:`); walk(nd.right, indent + 1);
+  }
+  if (tree) walk(tree.root, 0);
+  const order = names.map((_, j) => j).sort((a, b) => Math.max(...lr.W.map((w) => Math.abs(w[b]))) - Math.max(...lr.W.map((w) => Math.abs(w[a])))).slice(0, 8);
+  $("inside").innerHTML = `<div style="font-weight:700;margin-bottom:4px">Decision tree rules <span class="gapnote">(numbers in brackets: training examples of ${classNames.map(esc).join(" / ")} in that leaf)</span></div>
+  <div class="tree">${esc(lines.join("\n"))}</div>
+  <div style="font-weight:700;margin:12px 0 4px">Logistic regression weights${trainedFeat === "raw" ? " (8 largest of 42)" : ""}</div>
+  <div class="scroll"><table class="weights"><tr><th>feature</th>${classNames.map((n) => `<th>${esc(n)}</th>`).join("")}</tr>${
+    order.map((j) => `<tr><td>${names[j]}</td>${lr.W.map((w) => `<td class="${w[j] >= 0 ? "pos" : "neg"}">${w[j] >= 0 ? "+" : ""}${w[j].toFixed(2)}</td>`).join("")}</tr>`).join("")
+  }</table></div><p class="gapnote">Positive weight: a larger value of this feature pushes towards that sign. Features are standardised, so weights are comparable.</p>`;
+}
+
+/* ---------- class list UI ---------- */
+function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+function renderClasses() {
+  for (const [boxId, set, data] of [["classes", "train", train], ["testClasses", "test", test]]) {
+    $(boxId).innerHTML = classNames.map((n, c) => `<div class="cls"><span class="dot" style="background:${COLORS[c]}"></span>
+      ${set === "train" ? `<input id="name${c}" value="${esc(n)}" aria-label="Name of sign ${c + 1}">` : `<b>${esc(n)}</b>`}
+      <span class="count" id="${set}Count${c}">${data.filter((s) => s.y === c).length} examples</span>
+      <button data-set="${set}" data-y="${c}" class="recBtn">Hold to record</button></div>`).join("");
+  }
+  for (let c = 0; c < 3; c++) $("name" + c).addEventListener("input", (e) => { classNames[c] = e.target.value || `Sign ${c + 1}`; renderTestNames(); refreshResults(); });
+  document.querySelectorAll(".recBtn").forEach((b) => {
+    const start = (e) => { e.preventDefault(); startRec(b.dataset.set, +b.dataset.y, b); };
+    b.addEventListener("pointerdown", start);
+    b.addEventListener("pointerup", stopRec); b.addEventListener("pointerleave", stopRec); b.addEventListener("pointercancel", stopRec);
+    b.addEventListener("keydown", (e) => { if ((e.key === " " || e.key === "Enter") && !e.repeat) start(e); });
+    b.addEventListener("keyup", (e) => { if (e.key === " " || e.key === "Enter") stopRec(); });
+  });
+}
+function renderTestNames() { document.querySelectorAll("#testClasses .cls b").forEach((el, c) => (el.textContent = classNames[c])); }
+function updateCounts() {
+  for (let c = 0; c < 3; c++) {
+    $("trainCount" + c).textContent = `${train.filter((s) => s.y === c).length} examples`;
+    $("testCount" + c).textContent = `${test.filter((s) => s.y === c).length} examples`;
+  }
+}
+let recBtn = null;
+function startRec(set, y, btn) { recording = { set, y }; recBtn = btn; btn?.classList.add("recording"); $("recBadge").hidden = false; $("recBadge").textContent = `● recording ${set === "test" ? "test " : ""}${classNames[y]}`; }
+function stopRec() {
+  if (!recording) return;
+  const wasTest = recording.set === "test";
+  recording = null; recBtn?.classList.remove("recording"); recBtn = null; $("recBadge").hidden = true;
+  if (lr) { if (wasTest) refreshResults(); }
+}
+document.addEventListener("keydown", (e) => {
+  if (e.target.tagName === "INPUT" && e.target.type === "text") return;
+  if (["1", "2", "3"].includes(e.key) && !e.repeat) startRec("train", +e.key - 1, document.querySelectorAll('#classes .recBtn')[+e.key - 1]);
+});
+document.addEventListener("keyup", (e) => { if (["1", "2", "3"].includes(e.key)) stopRec(); });
+
+/* ---------- live loop ---------- */
+const video = $("video"), canvas = $("overlay"), ctx = canvas.getContext("2d");
+const BONES = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
+let lastT = -1;
+function loop() {
+  if (video.readyState >= 2 && video.currentTime !== lastT) {
+    lastT = video.currentTime;
+    canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+    const res = landmarker.detectForVideo(video, performance.now());
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (res.landmarks && res.landmarks.length) {
+      const lm = res.landmarks[0];
+      const hand = res.handedness?.[0]?.[0]?.categoryName;
+      latest = features(lm, hand);
+      const col = recording ? CANVAS_COLORS[recording.y] : "#ffffff";
+      ctx.strokeStyle = col; ctx.lineWidth = 4; ctx.fillStyle = col;
+      for (const [a, b] of BONES) { ctx.beginPath(); ctx.moveTo(lm[a].x * canvas.width, lm[a].y * canvas.height); ctx.lineTo(lm[b].x * canvas.width, lm[b].y * canvas.height); ctx.stroke(); }
+      for (const p of lm) { ctx.beginPath(); ctx.arc(p.x * canvas.width, p.y * canvas.height, 5, 0, 7); ctx.fill(); }
+      if (recording) { (recording.set === "test" ? test : train).push({ ...latest, y: recording.y }); updateCounts(); }
+    } else latest = null;
+    showLive();
+  }
+  requestAnimationFrame(loop);
+}
+
+function liveDecision() {
+  const m = modelKind() === "lr" ? lr : tree;
+  if (!m || !latest) return null;
+  const p = m.predict(latest[trainedFeat]);
+  const c = argmax(p);
+  return { p, c, sure: p[c] >= threshold() };
+}
+let lastProbsRender = 0;
+function showLive() {
+  const g = $("bigGuess");
+  const d = liveDecision();
+  if (!d) { g.hidden = true; } else { g.hidden = false; g.innerHTML = d.sure ? esc(classNames[d.c]) : `<span class="unsure">not sure</span>`; }
+  const now = performance.now();
+  if (now - lastProbsRender < 80) return; lastProbsRender = now;
+  if (!lr) return;
+  const t = threshold();
+  const block = (title, m) => {
+    const p = latest ? m.predict(latest[trainedFeat]) : [0, 0, 0];
+    return `<div><h3>${title}</h3>${p.map((v, c) => `<div class="bar"><span class="nm">${esc(classNames[c])}</span><span class="track"><span class="fill" style="width:${v * 100}%;background:${COLORS[c]}"></span><span class="thr" style="left:${t * 100}%"></span></span><span>${v.toFixed(2)}</span></div>`).join("")}</div>`;
+  };
+  $("probs").innerHTML = (latest ? "" : '<div class="gapnote">No hand in view.</div>') + block("Logistic regression", lr) + (tree ? block("Decision tree", tree) : "") + '<div class="gapnote">Black line = your cutoff from step 4.</div>';
+}
+
+/* ---------- game ---------- */
+function play() {
+  const m = modelKind() === "lr" ? lr : tree;
+  if (!m) { $("result").textContent = "Train a model first."; return; }
+  $("playBtn").disabled = true; $("youMove").textContent = "–"; $("cpuMove").textContent = "–"; $("result").textContent = "";
+  let n = 3;
+  const tick = () => {
+    if (n > 0) { $("countdown").textContent = n--; setTimeout(tick, 700); return; }
+    $("countdown").textContent = "shoot!";
+    // give the hand time to change, then watch for 600 ms and take the most frequent reading
+    const votes = { unsure: 0, none: 0, 0: 0, 1: 0, 2: 0 };
+    let watching = false;
+    const sample = () => { if (!watching) return; const d = liveDecision(); votes[!d ? "none" : d.sure ? d.c : "unsure"]++; requestAnimationFrame(sample); };
+    setTimeout(() => { watching = true; $("youMove").textContent = "watching…"; sample(); }, 250);
+    setTimeout(() => { watching = false; finish(votes); }, 850);
+  };
+  const finish = (votes) => {
+    const top = Object.keys(votes).reduce((a, b) => (votes[b] > votes[a] ? b : a));
+    const cpu = Math.floor(Math.random() * 3);
+    $("cpuMove").textContent = classNames[cpu];
+    if (top === "unsure" || top === "none") { $("youMove").textContent = top === "none" ? "no hand" : "not sure"; $("result").textContent = "Model was not sure → you lose this round"; score.unsure++; score.cpu++; }
+    else {
+      const c = +top;
+      $("youMove").textContent = classNames[c];
+      const beats = (a, b) => (a - b + 3) % 3 === 1; // 0 rock, 1 paper, 2 scissors
+      if (c === cpu) $("result").textContent = "Draw";
+      else if (beats(c, cpu)) { $("result").textContent = "You win"; score.you++; }
+      else { $("result").textContent = "Computer wins"; score.cpu++; }
+    }
+    $("scoreline").textContent = `You ${score.you} · Computer ${score.cpu} · Not sure ${score.unsure}`;
+    setTimeout(() => { $("countdown").textContent = "vs"; $("playBtn").disabled = false; }, 900);
+  };
+  tick();
+}
+
+/* ---------- wiring ---------- */
+async function startCamera() {
+  $("startBtn").disabled = true; $("camErr").textContent = "Loading the hand model (a few MB)…";
+  try {
+    const files = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm");
+    landmarker = await HandLandmarker.createFromOptions(files, {
+      baseOptions: { modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task", delegate: "GPU" },
+      runningMode: "VIDEO", numHands: 1,
+    });
+    $("camErr").textContent = "Asking for the camera…";
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
+    video.srcObject = stream;
+    $("camMsg").hidden = true;
+    await video.play();
+    requestAnimationFrame(loop);
+  } catch (err) {
+    $("startBtn").disabled = false;
+    $("camErr").textContent = `Could not start: ${err.message || err}. If Zoom is using the camera, stop your Zoom video and try again.`;
+  }
+}
+$("startBtn").addEventListener("click", startCamera);
+$("trainBtn").addEventListener("click", trainAll);
+for (const id of ["depth", "leaf"]) $(id).addEventListener("input", () => { $(id + "Out").textContent = $(id).value; trainTreeNow(); refreshResults(); });
+$("thr").addEventListener("input", () => { $("thrOut").textContent = threshold().toFixed(2); refreshTest(); });
+document.querySelectorAll('input[name="model"]').forEach((r) => r.addEventListener("change", refreshResults));
+document.querySelectorAll('input[name="feat"]').forEach((r) => r.addEventListener("change", () => { if (train.length) trainAll(); }));
+$("loadBtn").addEventListener("click", () => $("loadFile").click());
+$("loadFile").addEventListener("change", async (e) => {
+  const file = e.target.files[0]; if (!file) return;
+  const lines = (await file.text()).trim().split(/\r?\n/);
+  const head = lines[0].split(",");
+  const iLabel = head.indexOf("label"), iFirst = head.indexOf(STRETCH_NAMES[0]);
+  if (iLabel < 0 || iFirst < 0) { $("loadMsg").textContent = "That file does not look like a Hand Sign Lab CSV."; return; }
+  let added = 0, skipped = 0;
+  for (const line of lines.slice(1)) {
+    const cells = line.split(",");
+    const y = classNames.findIndex((n) => n.toLowerCase() === cells[iLabel].toLowerCase());
+    if (y < 0) { skipped++; continue; }
+    const nums = cells.slice(iFirst).map(Number);
+    test.push({ stretch: nums.slice(0, 6), raw: nums.slice(6, 48), y }); added++;
+  }
+  updateCounts(); refreshResults();
+  $("loadMsg").textContent = `Added ${added} rows from ${file.name} to your test set${skipped ? ` (${skipped} skipped: sign names did not match yours)` : ""}.`;
+  e.target.value = "";
+});
+$("playBtn").addEventListener("click", play);
+$("clearBtn").addEventListener("click", () => { train.length = 0; test.length = 0; lr = null; tree = null; trainedFeat = null; updateCounts(); $("scores").innerHTML = ""; $("testOut").innerHTML = ""; $("inside").textContent = "Train first."; $("probs").innerHTML = '<div class="gapnote">Train a model (step 2) to see live predictions here.</div>'; });
+$("csvBtn").addEventListener("click", () => {
+  const head = ["set", "label", ...STRETCH_NAMES, ...RAW_NAMES].join(",");
+  const rows = [...train.map((s) => ["train", s]), ...test.map((s) => ["test", s])].map(([set, s]) => [set, classNames[s.y], ...s.stretch.map((v) => v.toFixed(4)), ...s.raw.map((v) => v.toFixed(4))].join(","));
+  const blob = new Blob([head + "\n" + rows.join("\n")], { type: "text/csv" });
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "hand_signs.csv"; a.click();
+});
+renderClasses();
+</script>
+</body>
+</html>
